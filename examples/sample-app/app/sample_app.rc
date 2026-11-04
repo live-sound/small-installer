@@ -1,0 +1,28 @@
+#include <winres.h>
+#include "version.h"
+
+1 ICON "assets/app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    SAMPLE_VERSION_PARTS
+PRODUCTVERSION SAMPLE_VERSION_PARTS
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "Sample App"
+            VALUE "FileVersion", SAMPLE_VERSION
+            VALUE "ProductName", "Sample App"
+            VALUE "ProductVersion", SAMPLE_VERSION
+            VALUE "CompanyName", "Sample Publisher"
+            VALUE "OriginalFilename", "SampleApp.exe"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END

@@ -1,0 +1,3 @@
+[submodule "slim-ui"]
+	path = external/slim-ui
+	url = https://github.com/live-sound/slim-ui.git

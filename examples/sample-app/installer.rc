@@ -1,0 +1,32 @@
+#include <winres.h>
+#include "version.h"
+
+1 ICON "assets/app.ico"
+1 RT_MANIFEST "wizard.manifest"
+
+/* The welcome and finished pages' image: installer.c reads it by this id. */
+102 RCDATA "assets/welcome.jpg"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    SAMPLE_VERSION_PARTS
+PRODUCTVERSION SAMPLE_VERSION_PARTS
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "Sample App Setup"
+            VALUE "FileVersion", SAMPLE_VERSION
+            VALUE "ProductName", "Sample App"
+            VALUE "ProductVersion", SAMPLE_VERSION
+            VALUE "CompanyName", "Sample Publisher"
+            VALUE "OriginalFilename", "SampleAppSetup.exe"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END
