@@ -6,7 +6,7 @@ A complete setup program for a small application. It installs `SampleApp.exe`, a
 .\build.ps1
 ```
 
-This builds the application, the installer and the uninstaller, packs them, and writes `build\SampleAppSetup.exe` at the repository's root (about 490 KB).
+This builds the application, the installer and the uninstaller, packs them, and writes `build\SampleAppSetup.exe` at the repository's root. The script prints the final file size.
 
 ## What it shows
 
