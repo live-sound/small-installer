@@ -2,9 +2,9 @@
 
 [Back to the README](../README.md)
 
-Configuration, API details and packaging options for building your own installer.
-For a working starting point, see the [sample app](../examples/sample-app).
+Configuration, API details and packaging options for building your own installer. For a working starting point, see the [sample app](../examples/sample-app).
 
+- [Configure your installer](#configure-your-installer) and [build and pack](#build-and-pack)
 - [Feature flags](#feature-flags) and [limits](#limits)
 - [Enums](#enums) and [configuration structs](#structs)
 - [Pages](#page-constructors) and [callbacks](#context-functions)
@@ -13,6 +13,64 @@ For a working starting point, see the [sample app](../examples/sample-app).
 - [Replacing an existing installation](#replacing-an-existing-installation)
 - [Architecture and dependencies](#architecture)
 - [Size measurements](#size)
+- [Running tests](#running-tests)
+
+## Configure your installer
+
+This is a minimal three-page wizard: choose a folder, install, and finish. Save it as `installer.c` in your project and replace the example values, including `app_id` with a GUID unique to your application.
+
+```c
+#define SI_FEATURE_D2D
+#define SI_MODE_INSTALL
+#define SI_IMPLEMENTATION
+#include <small_installer/small_installer.h>
+
+int si_main(HINSTANCE hInst) {
+    SiConfig cfg = {0};
+    cfg.name         = L"MyApp";
+    cfg.version      = L"1.0.0";
+    cfg.publisher    = L"My Company";
+    cfg.app_id       = L"{YOUR-GUID-HERE}";
+    cfg.exe          = L"MyApp.exe";
+    cfg.install_base = SI_PATH_LOCAL_APP_DATA;
+    cfg.install_sub  = L"MyApp";
+    cfg.privileges   = SI_PRIV_PER_USER;
+    cfg.accent_color = 0x2196F3;
+
+    cfg.pages[0] = si_page_install_dir();
+    cfg.pages[1] = si_page_installing();
+    cfg.pages[2] = si_page_finished(NULL, 0);
+    cfg.page_count = 3;
+
+    return si_run(&cfg, hInst);
+}
+```
+
+Define `SI_IMPLEMENTATION` in exactly one C file per executable. The library calls `si_main()` from its entry point; your function configures the wizard and runs it. The [configuration reference](#siconfig) covers the other options.
+
+## Build and pack
+
+With this repository in a `small-installer` subfolder, add it to your CMake project:
+
+```cmake
+set(SI_BUILD_EXAMPLES OFF)
+add_subdirectory(small-installer)
+si_add_wizard(MySetup installer.c installer.rc)
+si_add_wizard(MyUninstall uninstaller.c uninstaller.rc)
+```
+
+Use the sample's [resource file](../examples/sample-app/installer.rc), [manifest](../examples/sample-app/wizard.manifest), and [uninstaller](../examples/sample-app/uninstaller.c) as starting points for the files above. `si_add_wizard` supplies the include paths, libraries and build flags. If you already have a Slim UI checkout, set `SI_SLIM_UI_DIR` to its path.
+
+Build from your project folder:
+
+```powershell
+cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config MinSizeRel
+```
+
+The build produces the wizard executables and `si_pack`, the packaging tool. **Pack your application files before distributing the installer.** The sample's [build script](../examples/sample-app/build.ps1) shows the full sequence: pack the uninstaller first, then bundle it with your app into the installer. See [packaging options](#si_pack-tool) for individual commands.
+
+Use `Release` for a build with the C runtime, or `MinSizeRel` for distribution with the no-CRT configuration. For size breakdowns and tradeoffs, see the [size measurements](#size).
 
 ## API Reference
 
@@ -333,8 +391,7 @@ si_pack --self-test
 
 ### Example
 
-Run these in PowerShell from the folder containing your compiled programs, with
-`si_pack.exe` on your PATH:
+Run these in PowerShell from the folder containing your compiled programs, with `si_pack.exe` on your PATH:
 
 ```powershell
 si_pack MyUninstall.exe -o uninstall.exe --locale en locales/en.txt --locale de locales/de.txt
@@ -371,15 +428,9 @@ Locale data is compiled into a binary string table, compressed on its own so the
 
 ## Replacing an existing installation
 
-Before cleanup and extraction, Small Installer terminates running processes whose
-executable name matches `SiConfig.exe`. This happens before `on_pre_install`;
-choose an application-specific executable name and account for this behavior when
-designing your update flow.
+Before cleanup and extraction, Small Installer terminates running processes whose executable name matches `SiConfig.exe`. This happens before `on_pre_install`; choose an application-specific executable name and account for this behavior when designing your update flow.
 
-If a payload file is still locked, interactive setup shows the file path and Windows
-error with Retry and Cancel options. Retry attempts that file again. Cancel stops
-setup without showing the finished page or launching the application. Silent setup
-returns a nonzero result and does not relaunch the application.
+If a payload file is still locked, interactive setup shows the file path and Windows error with Retry and Cancel options. Retry attempts that file again. Cancel stops setup without showing the finished page or launching the application. Silent setup returns a nonzero result and does not relaunch the application.
 
 ## Architecture
 
@@ -426,36 +477,50 @@ Third-party:
 
 ## Size
 
-These previously recorded measurements used Visual Studio 2022, x64, `MinSizeRel`. They are illustrative, not a size guarantee for the current build; compiler options, resources and payload files affect the result.
+Measured on November 5, 2026 with Visual Studio 2022 (MSVC 19.44), x64, `MinSizeRel`, and the repository's `si_add_wizard` build flags, including compiler security support. The [minimal installer](#configure-your-installer) has three pages, the sample's Windows manifest, and a 35-byte text payload. Optional images, translations, dark mode and animations are disabled.
 
-| Setup program | Size |
-|---------------|------|
-| The [minimal installer](../README.md#configure-your-installer) installer: three pages, a manifest, one small file, no uninstaller | 122.1 KB |
-| The same with an uninstaller | 168.8 KB |
-| The example, `SampleAppSetup.exe` | 381.6 KB |
+| Setup program | Size | Bytes |
+|---------------|------|-------|
+| Minimal installer, without an uninstaller | 122.1 KiB | 125,042 |
+| Same installer with a two-page uninstaller | 169.0 KiB | 173,086 |
 
-The first row is the minimum: the wizard, its Direct2D drawing and the LZMA decoder are always there, and whatever you pack adds its compressed size on top. A minimal uninstaller is 100 KB, which compresses to 47 KB in the archive.
+This is a measured minimal configuration, not a guaranteed lower bound. Your application's files add their compressed size; artwork, optional features, signing and compiler changes also affect the final download. One KiB is 1,024 bytes, so these downloads are approximately 125 KB and 173 KB in decimal units.
+
+The installer stub alone is 122.0 KiB. The uninstaller is 100.5 KiB before compression; bundling it adds about 46.9 KiB to the setup program. Both include the wizard and Direct2D rendering. The installer also includes the LZMA decoder.
+
+### Earlier feature and sample measurements
+
+The following breakdowns were recorded previously with Visual Studio 2022, x64, `MinSizeRel`; they were not remeasured with the minimal builds above. Treat them as illustrative costs, not fixed overheads.
 
 | Feature flag | Adds to each program |
 |--------------|----------------------|
-| `SI_FEATURE_DARK_MODE` | 1 KB |
-| `SI_FEATURE_PNG` | 2 KB |
-| `SI_FEATURE_I18N` | 3 KB |
-| `SI_FEATURE_ANIMATIONS` | 7.5 KB |
+| `SI_FEATURE_DARK_MODE` | 1 KiB |
+| `SI_FEATURE_PNG` | 2 KiB |
+| `SI_FEATURE_I18N` | 3 KiB |
+| `SI_FEATURE_ANIMATIONS` | 7.5 KiB |
 | `SI_FEATURE_DOWNLOAD` | Nothing until the installer calls it |
-| `SI_FEATURE_ALL_CONTROLS` | 68.5 KB |
+| `SI_FEATURE_ALL_CONTROLS` | 68.5 KiB |
 
-The example's 381.6 KB:
+The example's 381.6 KiB:
 
 | Part | Size |
 |------|------|
-| **Installer program** | **185.5 KB** |
-| The library with PNG, i18n, dark mode and animations | 132.5 KB |
-| The example's own code | 10 KB |
-| Icon, welcome image, manifest and version information | 43 KB |
-| **Archive** | **164.2 KB** |
-| The uninstaller program, 49 KB of it two images | 108.1 KB |
-| The uninstaller's copy of the translations | 32.4 KB |
-| The application, most of it its icon | 23.7 KB |
-| **The installer's translations**, 30 languages | **31.9 KB** |
+| **Installer program** | **185.5 KiB** |
+| The library with PNG, i18n, dark mode and animations | 132.5 KiB |
+| The example's own code | 10 KiB |
+| Icon, welcome image, manifest and version information | 43 KiB |
+| **Archive** | **164.2 KiB** |
+| The uninstaller program, 49 KiB of it two images | 108.1 KiB |
+| The uninstaller's copy of the translations | 32.4 KiB |
+| The application, most of it its icon | 23.7 KiB |
+| **The installer's translations**, 30 languages | **31.9 KiB** |
 
+
+## Running tests
+
+To build and run the repository's tests after configuring it with CMake:
+
+```powershell
+cmake --build build --config MinSizeRel
+ctest --test-dir build -C MinSizeRel --output-on-failure
+```
