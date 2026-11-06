@@ -1,4 +1,4 @@
-/* Floating bubbles adapted from Termy's installer welcome animation. The
+/* Floating bubbles over the welcome image. The
  * default page still paints its text and accessibility controls. */
 #ifndef SAMPLE_WELCOME_BUBBLES_H
 #define SAMPLE_WELCOME_BUBBLES_H
@@ -34,7 +34,7 @@ static void sample_bubble_init(SampleBubble* p, float width, float height, int s
     p->vx = si_cosf(angle) * speed;
     p->vy = si_sinf(angle) * speed;
     p->radius = 5 + radius * radius * 20;
-    /* Slightly stronger than Termy's opacity for the pale sample artwork. */
+    /* Strong enough to show on the pale sample artwork. */
     p->peak_alpha = sample_bubble_random(0.18f, 0.34f);
     p->max_life = sample_bubble_random(360, 840);
     p->life = scatter ? sample_bubble_random(0, p->max_life) : 0;
