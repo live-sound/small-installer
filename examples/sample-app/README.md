@@ -14,6 +14,7 @@ This builds the application, the installer and the uninstaller, packs them, and 
 |------|---------------|
 | `installer.c` | The wizard's pages, registry entries, a Start Menu shortcut, a `sample-app://` link handler, a minimum Windows version, and the callbacks around installation |
 | `confetti.h` | A finished-page animation through `SiFinishedAnim`, paced by the wizard's vsync pump |
+| `welcome_bubbles.h` | Termy's floating bubble effect over the welcome image, respecting the Windows animation setting |
 | `uninstaller.c` | The confirmation page, what the library removes by itself, and what a callback has to remove |
 | `installer.rc`, `uninstaller.rc` | The icon, the embedded images, the manifest and the version information |
 | `version.h` | The version, in one place for the code and the resources |

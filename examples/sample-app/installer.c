@@ -12,6 +12,7 @@
 #include <small_installer/small_installer.h>
 
 #include "confetti.h"
+#include "welcome_bubbles.h"
 #include "version.h"
 
 #define SAMPLE_MIN_WINDOWS_BUILD 19041u /* Windows 10 version 2004 */
@@ -111,7 +112,7 @@ int si_main(HINSTANCE instance) {
     cfg.transition   = SI_TRANSITION_CROSSFADE;
 
     image = sample_resource(instance, 102, &image_size);
-    cfg.pages[0] = si_page_welcome(image, image_size);
+    cfg.pages[0] = sample_welcome_page(image, image_size);
     cfg.pages[1] = si_page_license(L"licenseText", 0);
     cfg.pages[2] = si_page_install_dir();
     cfg.pages[3] = si_page_installing();
@@ -141,5 +142,9 @@ int si_main(HINSTANCE instance) {
     cfg.on_clean_reinstall = sample_clean_reinstall;
     cfg.on_finished        = sample_finished;
 
-    return si_run(&cfg, instance);
+    {
+        int result = si_run(&cfg, instance);
+        sample_bubbles_stop(NULL, NULL);
+        return result;
+    }
 }

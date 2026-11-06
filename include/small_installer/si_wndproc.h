@@ -155,12 +155,8 @@ static void si_show_page(SiWizardState* st, int index) {
     si_update_buttons(st);
     /* Flush pending keyboard messages so Enter doesn't carry over between pages */
     { MSG m; while (PeekMessageW(&m, st->hwnd, WM_KEYFIRST, WM_KEYLAST, PM_REMOVE)) {;} }
-    /* Focus is handled by custom control system, not Win32 SetFocus */
-    { int i; for (i = 0; i < st->ctrl.control_count; i++) st->ctrl.controls[i].state &= ~SI_CTRL_FOCUSED;
-      st->ctrl.focused_control = si_ctrl_next_focusable(&st->ctrl, st->ctrl.persistent_control_count - 1, 1);
-      if (st->ctrl.focused_control >= 0 && st->ctrl.focused_control < st->ctrl.control_count)
-          st->ctrl.controls[st->ctrl.focused_control].state |= SI_CTRL_FOCUSED;
-    }
+    sui_ctrl_set_focus(&st->ctrl,
+        si_ctrl_next_focusable(&st->ctrl, st->ctrl.persistent_control_count - 1, 1));
 #ifdef SI_FEATURE_ANIMATIONS
     if (st->transition_bitmap) {
         si_transition_start(st, index > old_page ? 1 : -1);
@@ -308,6 +304,7 @@ static void si_cancel_confirm_paint(SiConfirmDialogState* dlg, HDC dc) {
     text_y = (float)si_confirm_scale(dlg, 24);
     text_w = w - (float)si_confirm_scale(dlg, 48);
     text_h = h - footer - text_y - (float)si_confirm_scale(dlg, 10);
+    si_accessible_text(&dlg->ctrl, 400, dlg->message, text_x, text_y, text_w, text_h);
     si_renderer_draw_text(&dlg->renderer, dlg->message, text_x, text_y, text_w, text_h,
         dlg->scheme->text, 1, 13.0f);
 
@@ -500,6 +497,10 @@ static void si_wizard_on_click(int ctrl_id, void* user_data) {
     else if (ctrl_id == IDCANCEL) {
         if (si_confirm_cancel(st) == IDYES)
             DestroyWindow(st->hwnd);
+    } else if (st->current_page >= 0 && st->current_page < st->page_count) {
+        SiPage* pg = &st->pages[st->current_page];
+        if (pg->vtable && pg->vtable->on_command)
+            pg->vtable->on_command(pg, MAKEWPARAM(ctrl_id, BN_CLICKED), 0);
     }
 }
 
@@ -509,6 +510,13 @@ static void si_wizard_on_click(int ctrl_id, void* user_data) {
 
 static LRESULT CALLBACK si_wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+        if (g_state) {
+            LRESULT result;
+            if (sui_default_msg(&g_state->ctrl, hwnd, msg, wParam, lParam, &result)) return result;
+        }
+        break;
     case DM_GETDEFID:
         return MAKELRESULT(SI_ID_NEXT, DC_HASDEFID);
     case WM_DPICHANGED: {
@@ -601,6 +609,10 @@ static LRESULT CALLBACK si_wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         si_renderer_set_dc(&g_state->renderer, ps.hdc);
         si_renderer_begin(&g_state->renderer);
         si_renderer_clear(&g_state->renderer, g_state->scheme->background);
+        { int i; for (i = 0; i < g_state->ctrl.control_count; ++i)
+            if (g_state->ctrl.controls[i].state & SUI_CTRL_LABEL_NO_DRAW)
+                g_state->ctrl.controls[i].state |= SUI_CTRL_HIDDEN;
+        }
         GetClientRect(hwnd, &cr);
         { float w=(float)cr.right, h=(float)cr.bottom, bh=(float)si_scale(g_state,SI_BTNAREA);
           RECT pa;

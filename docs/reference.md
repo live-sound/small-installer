@@ -88,7 +88,7 @@ Define these **before** including the header:
 | `SI_FEATURE_DARK_MODE` | Follow the Windows dark app theme |
 | `SI_FEATURE_ANIMATIONS` | Enable page transitions and the vsync pump behind them (`SiConfig.transition`) |
 | `SI_FEATURE_DOWNLOAD` | Enable WinHTTP file downloads (links winhttp.lib) |
-| `SI_FEATURE_ALL_CONTROLS` | Keep Slim UI's other controls for a custom page, and `si_ctrl_set_tooltip`: combo boxes, tabs, lists, spinners, sliders and the rest. A wizard leaves them out, which saves 68.5 KB per program |
+| `SI_FEATURE_ALL_CONTROLS` | Keep Slim UI's other controls for a custom page, and `si_ctrl_set_tooltip`: combo boxes, tabs, lists, spinners, sliders and the rest. A wizard leaves them out; see the [measured size difference](#size) |
 | `SI_MODE_INSTALL` | An installer build: compiles the extraction of the appended archive |
 | `SI_MODE_UNINSTALL` | An uninstaller build, which adds its silent mode; set `SiConfig.is_uninstaller` too |
 
@@ -477,16 +477,19 @@ Third-party:
 
 ## Size
 
-Measured on November 5, 2026 with Visual Studio 2022 (MSVC 19.44), x64, `MinSizeRel`, and the repository's `si_add_wizard` build flags, including compiler security support. The [minimal installer](#configure-your-installer) has three pages, the sample's Windows manifest, and a 35-byte text payload. Optional images, translations, dark mode and animations are disabled.
+Measured on November 6, 2026 with Visual Studio 2022 (MSVC 19.44), x64, `MinSizeRel`, and the repository's `si_add_wizard` build flags, including compiler security support, default inlining and the size-optimized LZMA decoder (`Z7_LZMA_SIZE_OPT`). Text views, containers and accessibility for enabled controls remain included. The [minimal installer](#configure-your-installer) has three pages, the sample's Windows manifest, and a 35-byte text payload. Optional images, translations, dark mode and animations are disabled.
 
 | Setup program | Size | Bytes |
 |---------------|------|-------|
-| Minimal installer, without an uninstaller | 122.1 KiB | 125,042 |
-| Same installer with a two-page uninstaller | 169.0 KiB | 173,086 |
+| Minimal installer, without an uninstaller | 115.6 KiB | 118,386 |
+| Same installer with a two-page uninstaller | 160.6 KiB | 164,432 |
+| Full sample, `SampleAppSetup.exe` | 360.6 KiB | 369,204 |
 
-This is a measured minimal configuration, not a guaranteed lower bound. Your application's files add their compressed size; artwork, optional features, signing and compiler changes also affect the final download. One KiB is 1,024 bytes, so these downloads are approximately 125 KB and 173 KB in decimal units.
+This is a measured minimal configuration, not a guaranteed lower bound. Your application's files add their compressed size; artwork, optional features, signing and compiler changes also affect the final download. One KiB is 1,024 bytes, so these downloads are approximately 118 KB and 164 KB for the two minimal configurations in decimal units.
 
-The installer stub alone is 122.0 KiB. The uninstaller is 100.5 KiB before compression; bundling it adds about 46.9 KiB to the setup program. Both include the wizard and Direct2D rendering. The installer also includes the LZMA decoder.
+The installer stub alone is 115.5 KiB. The uninstaller is 95.5 KiB before compression; bundling it adds about 45.0 KiB to the setup program. Both include the wizard and Direct2D rendering. The installer also includes the LZMA decoder. `MinSizeRel` uses its smaller-code option, which can reduce decoding speed; other build configurations use the default decoder.
+
+Enabling `SI_FEATURE_ALL_CONTROLS` increases the minimal installer stub from 115.5 to 195.5 KiB, an additional 80.0 KiB. This includes drawing, event handling and accessibility support for the additional controls.
 
 ### Earlier feature and sample measurements
 

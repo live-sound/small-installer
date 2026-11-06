@@ -156,11 +156,39 @@ static void si_media_split_layout(const SiWizardState* st, RECT area, int img_w,
     }
 }
 
+/* Keep custom-painted prose in the control tree without drawing it twice. */
+static void si_accessible_text(SuiControlHost* host, int id, const wchar_t* text,
+                               float x, float y, float w, float h) {
+    SuiControl* c = sui_ctrl_find(host, id);
+    if (!c) {
+        int idx = sui_ctrl_add_label(host, id, x, y, w, h, text);
+        if (idx < 0) return;
+        c = &host->controls[idx];
+    }
+    sui__wstrncpy_z(c->text, text ? text : L"", SUI_CTRL_TEXT_MAX);
+    c->x = x; c->y = y; c->w = w; c->h = h;
+    c->state = SUI_CTRL_LABEL_NO_DRAW;
+}
+
+static void si_page_draw_text(int id, SiRenderer* r, const wchar_t* text,
+                              float x, float y, float w, float h,
+                              uint32_t color, int bold, float pt) {
+    if (g_state) si_accessible_text(&g_state->ctrl, id, text, x, y, w, h);
+    si_renderer_draw_text(r, text, x, y, w, h, color, bold, pt);
+}
+
+static void si_page_draw_text_centered(int id, SiRenderer* r, const wchar_t* text,
+                                       float x, float y, float w, float h,
+                                       uint32_t color, float pt) {
+    if (g_state) si_accessible_text(&g_state->ctrl, id, text, x, y, w, h);
+    si_renderer_draw_text_centered(r, text, x, y, w, h, color, pt);
+}
+
 static void si_draw_title(SiRenderer* r, float s, const SiWizardState* st, float w,
                            const wchar_t* text, uint32_t color) {
     float dpi = (float)st->dpi;
     float title_h = SI_TITLE_PT * dpi / 72.0f;
-    si_renderer_draw_text(r, text, (float)si_scale(st, SI_HEADER_LEFT),
+    si_page_draw_text(400, r, text, (float)si_scale(st, SI_HEADER_LEFT),
         (float)si_scale(st, SI_HEADER_PAD_TOP), w, title_h + 4, color, 1, SI_TITLE_PT);
 }
 
@@ -171,7 +199,7 @@ static void si_draw_subtitle(SiRenderer* r, float s, const SiWizardState* st, fl
     float sub_y = (float)si_scale(st, SI_HEADER_PAD_TOP) + title_h
                 + (float)si_scale(st, SI_HEADER_PAD_MID);
     float sub_h = SI_SUBTITLE_PT * dpi / 72.0f;
-    si_renderer_draw_text(r, text, (float)si_scale(st, SI_HEADER_LEFT),
+    si_page_draw_text(401, r, text, (float)si_scale(st, SI_HEADER_LEFT),
         sub_y, w, sub_h + 4, color, 0, SI_SUBTITLE_PT);
 }
 
@@ -199,8 +227,11 @@ static void si_lic_create(SiPage* pg, HWND parent) {
 }
 
 static void si_lic_destroy(SiPage* pg) {
-    (void)pg;
-    if (g_state) si_ctrl_clear_page(&g_state->ctrl);
+    if (g_state) {
+        SiControl* c = si_ctrl_find(&g_state->ctrl, SI_IDC_LICENSE_CHECK);
+        if (c) pg->data.license.checked_default = (c->state & SI_CTRL_CHECKED) != 0;
+        si_ctrl_clear_page(&g_state->ctrl);
+    }
 }
 
 static void si_lic_paint(SiPage* pg, HDC dc, RECT area) {
@@ -397,7 +428,10 @@ static void si_idir_create(SiPage* pg, HWND parent) {
 
 static void si_idir_destroy(SiPage* pg) {
     (void)pg;
-    if (g_state) si_ctrl_clear_page(&g_state->ctrl);
+    if (g_state) {
+        si_idir_recompute_space();
+        si_ctrl_clear_page(&g_state->ctrl);
+    }
 }
 
 static void si_idir_paint(SiPage* pg, HDC dc, RECT area) {
@@ -422,10 +456,10 @@ static void si_idir_paint(SiPage* pg, HDC dc, RECT area) {
         si_idir_format_size(req, g_idir_space.required_bytes);
         si_idir_format_size(avail, g_idir_space.free_bytes);
         wsprintfW(line, L(L"Required: %s    Available: %s"), req, avail);
-        si_renderer_draw_text(&st->renderer, line, (float)lay.left,
+        si_page_draw_text(402, &st->renderer, line, (float)lay.left,
             (float)si_layout_next(&lay, info_h), (float)lay.width, (float)info_h, color, 0, 10.0f);
         if (!g_idir_space.has_enough) {
-            si_renderer_draw_text(&st->renderer, L(L"Not enough free disk space at this location."),
+            si_page_draw_text(403, &st->renderer, L(L"Not enough free disk space at this location."),
                 (float)lay.left, (float)si_layout_next(&lay, info_h), (float)lay.width, (float)info_h,
                 0xCC3333, 0, 10.0f);
         }
@@ -585,18 +619,18 @@ static void si_reinstall_paint(SiPage* pg, HDC dc, RECT area) {
     }
 
     wsprintfW(line, L(L"Installed version: %s"), installed);
-    si_renderer_draw_text(&st->renderer, line, (float)lay.left,
+    si_page_draw_text(404, &st->renderer, line, (float)lay.left,
         (float)si_layout_next(&lay, line_h), w, (float)line_h,
         st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
     wsprintfW(line, L(L"Setup version: %s"), st->app_version[0] ? st->app_version : L(L"unknown"));
     lay.y -= lay.gap;
-    si_renderer_draw_text(&st->renderer, line, (float)lay.left,
+    si_page_draw_text(405, &st->renderer, line, (float)lay.left,
         (float)si_layout_next(&lay, line_h), w, (float)line_h,
         st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
     lay.y += si_scale(st, 10) - lay.gap;
 
     desc_h = si_reinstall_description_height(st, (int)w);
-    si_renderer_draw_text(&st->renderer, si_reinstall_description_text(st),
+    si_page_draw_text(406, &st->renderer, si_reinstall_description_text(st),
         (float)lay.left, (float)si_layout_next(&lay, desc_h), w, (float)desc_h,
         st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
 }
@@ -771,7 +805,7 @@ static void si_inst_paint(SiPage* pg, HDC dc, RECT area) {
       si_renderer_draw_progress(&st->renderer, px, py, pw, ph, pct,
           st->scheme->progress_fill, st->scheme->progress_bg);
       if (pg->data.installing.cc_status[0])
-          si_renderer_draw_text(&st->renderer, pg->data.installing.cc_status,
+          si_page_draw_text(407, &st->renderer, pg->data.installing.cc_status,
               px, (float)lay.y, pw, 20.0f*s, st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
     }
 }
@@ -900,7 +934,7 @@ static void si_fin_paint(SiPage* pg, HDC dc, RECT area) {
         ih.data = fd->img_handle; ih.width = fd->img_width; ih.height = fd->img_height;
         si_renderer_draw_image(&st->renderer, ih, image_rc.x, image_rc.y, image_rc.w, image_rc.h);
     }
-    si_renderer_draw_text(&st->renderer, L(L"Installation Complete"),
+    si_page_draw_text(408, &st->renderer, L(L"Installation Complete"),
         text_rc.x, title_y, text_rc.w, title_h, st->scheme->text, 1, title_pt);
     if (fd->anim.paint)
         fd->anim.paint(fd->anim.user, st, st->renderer.render_target,
@@ -980,16 +1014,16 @@ static void si_welcome_paint(SiPage* pg, HDC dc, RECT area) {
         title_ah = si_measured_text_height(st, title, text_rc.w, 1, 18.0f);
         sub_y = title_y + title_ah + (float)si_scale(st, SI_TEXT_GAP);
         sub_ah = si_measured_text_height(st, subtitle, text_rc.w, 0, 11.0f);
-        si_renderer_draw_text(&st->renderer, title, text_rc.x, title_y, text_rc.w, title_ah, st->scheme->text, 1, 18.0f);
-        si_renderer_draw_text(&st->renderer, subtitle, text_rc.x, sub_y, text_rc.w, sub_ah, st->scheme->text_secondary, 0, 11.0f);
+        si_page_draw_text(409, &st->renderer, title, text_rc.x, title_y, text_rc.w, title_ah, st->scheme->text, 1, 18.0f);
+        si_page_draw_text(410, &st->renderer, subtitle, text_rc.x, sub_y, text_rc.w, sub_ah, st->scheme->text_secondary, 0, 11.0f);
     } else {
         SiRectF text_rc = si_page_content_rect(st, area);
         float title_y = text_rc.y + (float)si_scale(st, SI_HEADER_PAD_TOP);
         float title_ah = si_measured_text_height(st, title, text_rc.w, 1, SI_TITLE_PT);
         float sub_y = title_y + title_ah + (float)si_scale(st, SI_TEXT_GAP);
         float sub_ah = si_measured_text_height(st, subtitle, text_rc.w, 0, SI_SUBTITLE_PT);
-        si_renderer_draw_text(&st->renderer, title, text_rc.x, title_y, text_rc.w, title_ah, st->scheme->text, 1, SI_TITLE_PT);
-        si_renderer_draw_text(&st->renderer, subtitle, text_rc.x, sub_y, text_rc.w, sub_ah, st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
+        si_page_draw_text(411, &st->renderer, title, text_rc.x, title_y, text_rc.w, title_ah, st->scheme->text, 1, SI_TITLE_PT);
+        si_page_draw_text(412, &st->renderer, subtitle, text_rc.x, sub_y, text_rc.w, sub_ah, st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
     }
 }
 
@@ -1039,10 +1073,10 @@ static void si_confirm_paint(SiPage* pg, HDC dc, RECT area) {
         image_rc = si_fit_image_rect(bounds, ih.width, ih.height);
         si_renderer_draw_image(&st->renderer, ih, image_rc.x, image_rc.y, image_rc.w, image_rc.h);
         if (key)
-            si_renderer_draw_text_centered(&st->renderer, msg, content.x, image_rc.y + image_rc.h + gap, content.w, text_h,
+            si_page_draw_text_centered(413, &st->renderer, msg, content.x, image_rc.y + image_rc.h + gap, content.w, text_h,
                 st->scheme->text_secondary, 13.0f);
     } else {
-        si_renderer_draw_text(&st->renderer, msg, content.x,
+        si_page_draw_text(414, &st->renderer, msg, content.x,
             content.y + (content.h - text_h) * 0.5f, content.w, text_h,
             st->scheme->text_secondary, 0, 13.0f);
     }
@@ -1316,7 +1350,7 @@ static void si_uninst_paint(SiPage* pg, HDC dc, RECT area) {
         title_y = text_rc.y + (float)si_scale(st, SI_HEADER_PAD_TOP);
         title_h = si_measured_text_height(st, L(L"Uninstall Complete"), text_rc.w, 1, title_pt);
         si_renderer_draw_image(&st->renderer, ih, image_rc.x, image_rc.y, image_rc.w, image_rc.h);
-        si_renderer_draw_text(&st->renderer, L(L"Uninstall Complete"),
+        si_page_draw_text(415, &st->renderer, L(L"Uninstall Complete"),
             text_rc.x, title_y, text_rc.w, title_h, st->scheme->text, 1, title_pt);
     } else if (pg->data.uninstalling.done) {
         SiRectF text_rc;
@@ -1324,7 +1358,7 @@ static void si_uninst_paint(SiPage* pg, HDC dc, RECT area) {
         si_uninst_done_layout(st, &pg->data.uninstalling, NULL, &text_rc);
         title_y = text_rc.y + (float)si_scale(st, SI_HEADER_PAD_TOP);
         title_h = si_measured_text_height(st, L(L"Uninstall Complete"), text_rc.w, 1, SI_TITLE_PT);
-        si_renderer_draw_text(&st->renderer, L(L"Uninstall Complete"),
+        si_page_draw_text(416, &st->renderer, L(L"Uninstall Complete"),
             text_rc.x, title_y, text_rc.w, title_h, st->scheme->text, 1, SI_TITLE_PT);
     } else {
         si_draw_title(&st->renderer, s, st, content.w, L(L"Uninstalling..."), st->scheme->text);
@@ -1338,7 +1372,7 @@ static void si_uninst_paint(SiPage* pg, HDC dc, RECT area) {
           si_renderer_draw_progress(&st->renderer, px, py, pw, ph, pct,
               st->scheme->progress_fill, st->scheme->progress_bg);
           if (pg->data.uninstalling.cc_status[0])
-              si_renderer_draw_text(&st->renderer, pg->data.uninstalling.cc_status,
+              si_page_draw_text(417, &st->renderer, pg->data.uninstalling.cc_status,
                   px, (float)lay.y, pw, 20.0f*s, st->scheme->text_secondary, 0, SI_SUBTITLE_PT);
         }
     }

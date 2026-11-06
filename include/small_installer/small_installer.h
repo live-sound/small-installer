@@ -124,6 +124,10 @@ int si_strcmp(const char* a, const char* b);
 #define SUI_IMPLEMENTATION
 #endif
 
+/* Match the wizard's paragraph buffers and allow a full Windows destination path. */
+#ifndef SUI_CTRL_TEXT_MAX
+#define SUI_CTRL_TEXT_MAX 512
+#endif
 #include <slim_ui/slim_ui.h>
 
 /* ── Font sizes (points) ───────────────────────────────────────────────── */
