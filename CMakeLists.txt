@@ -87,10 +87,11 @@ if(SI_BUILD_TESTS)
     add_test(NAME si_uninstall_files COMMAND si_uninstall_files_test)
 
     add_executable(si_ui_test tests/si_ui_test.c)
-    target_include_directories(si_ui_test PRIVATE include ${SI_SLIM_UI_DIR}/include third_party/lzma)
+    target_include_directories(si_ui_test PRIVATE include ${SI_SLIM_UI_DIR}/include ${SI_SLIM_UI_DIR}/tests third_party/lzma)
     target_link_libraries(si_ui_test PRIVATE si_lzma msimg32 d2d1 dwrite dwmapi
         user32 gdi32 shell32 ole32 oleaut32 comctl32 shlwapi advapi32 winmm)
     add_test(NAME si_ui COMMAND si_ui_test)
+    set_tests_properties(si_ui PROPERTIES TIMEOUT 60)
 
     si_add_wizard(si_silent_uninstaller tests/si_silent_uninstaller.c)
     add_executable(si_silent_uninstall_test tests/si_silent_uninstall_test.c)

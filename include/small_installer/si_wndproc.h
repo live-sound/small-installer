@@ -508,6 +508,7 @@ static void si_wizard_on_click(int ctrl_id, void* user_data) {
    WNDPROC + WIZARD RUN
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* The wizard is fixed-size; native min/max tracking must not derive a width from wrapped page prose. */
 static LRESULT CALLBACK si_wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_SETFOCUS:
@@ -539,9 +540,6 @@ static LRESULT CALLBACK si_wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     case WM_SIZE:
         if (g_state && LOWORD(lParam)>0 && HIWORD(lParam)>0)
             si_renderer_resize(&g_state->renderer, LOWORD(lParam), HIWORD(lParam));
-        return 0;
-    case WM_GETMINMAXINFO:
-        if (g_state) sui_handle_wm_getminmaxinfo(&g_state->ctrl, hwnd, lParam);
         return 0;
     case WM_MOUSEMOVE:
 #ifdef SI_FEATURE_ANIMATIONS

@@ -5,6 +5,7 @@
 #define SI_IMPLEMENTATION
 #include <small_installer/small_installer.h>
 #include "../examples/sample-app/welcome_bubbles.h"
+#include "win32_test_support.h"
 
 int si_main(HINSTANCE instance) { (void)instance; return 0; }
 static int failures, last_command;
@@ -18,7 +19,76 @@ static int record_command(SiPage* page, WPARAM wp, LPARAM lp) {
 }
 static void record_click(int id, void* data) { (void)data; last_command = id; }
 
-int main(void) {
+static int move_entries;
+static LRESULT CALLBACK moving_wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_ENTERSIZEMOVE) {
+        ++move_entries;
+        /* Finish the real caption-move loop using only this private window's queue. */
+        PostMessageW(hwnd, WM_KEYDOWN, VK_RIGHT, 0);
+        PostMessageW(hwnd, WM_KEYDOWN, VK_RIGHT, 0);
+        PostMessageW(hwnd, WM_KEYDOWN, VK_RETURN, 0);
+    }
+    return si_wndproc(hwnd, msg, wp, lp);
+}
+
+static void check_reinstall_move(int dpi, int clean_only) {
+    static SiWizardState st;
+    WNDCLASSW wc = {0};
+    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    RECT before, after, bounds = {0};
+    MINMAXINFO limits = {0};
+    MSG quit;
+    int entered = move_entries, repeat;
+    memset(&st, 0, sizeof(st));
+    st.dpi = dpi;
+    st.scheme = &sui_scheme_light;
+    st.page_count = 1;
+    st.reinstall_clean_only = clean_only;
+    wcscpy(st.app_name, L"Example App");
+    wcscpy(st.app_version, L"1.0.0");
+    wcscpy(st.existing_version, L"2.0.0");
+    st.pages[0] = si_page_reinstall();
+    g_state = &st;
+    wc.lpfnWndProc = moving_wizard_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.lpszClassName = L"SI_MovingWizardTest";
+    RegisterClassW(&wc);
+    bounds.right = si_scale(&st, SI_BASE_W);
+    bounds.bottom = si_scale(&st, SI_BASE_H);
+    AdjustWindowRectEx(&bounds, style, FALSE, 0);
+    st.hwnd = CreateWindowExW(0, wc.lpszClassName, L"Setup move regression", style,
+        100, 100, bounds.right - bounds.left, bounds.bottom - bounds.top,
+        NULL, NULL, wc.hInstance, NULL);
+    check(st.hwnd != NULL, "create fixed-size wizard");
+    if (!st.hwnd) { g_state = NULL; return; }
+    si_renderer_init_fields(&st.renderer);
+    check(si_renderer_init(&st.renderer, st.hwnd), "initialize wizard renderer");
+    si_ctrl_host_init(&st.ctrl, st.hwnd, &st.renderer, st.scheme, dpi);
+    si_reinstall_create(&st.pages[0], st.hwnd);
+    ShowWindow(st.hwnd, SW_SHOW);
+    UpdateWindow(st.hwnd);
+    check(sui_ctrl_find(&st.ctrl, 406) != NULL, "reinstall prose enters the accessible control tree");
+    GetWindowRect(st.hwnd, &before);
+    SendMessageW(st.hwnd, WM_GETMINMAXINFO, 0, (LPARAM)&limits);
+    check(limits.ptMinTrackSize.x <= before.right - before.left,
+        "wrapped reinstall prose cannot increase the wizard's minimum width");
+    check(limits.ptMinTrackSize.y <= before.bottom - before.top,
+        "reinstall controls cannot increase the wizard's minimum height");
+    for (repeat = 0; repeat < 3; ++repeat) {
+        SendMessageW(st.hwnd, WM_SYSCOMMAND, SC_MOVE, 0);
+        GetWindowRect(st.hwnd, &after);
+        check(after.right - after.left == before.right - before.left &&
+              after.bottom - after.top == before.bottom - before.top,
+            "caption movement preserves the wizard's dimensions");
+    }
+    check(move_entries == entered + 3, "all caption moves enter the native move loop");
+    DestroyWindow(st.hwnd);
+    si_renderer_release(&st.renderer);
+    g_state = NULL;
+    while (PeekMessageW(&quit, NULL, WM_QUIT, WM_QUIT, PM_REMOVE)) {}
+}
+
+static int run_tests(int argc, const char* const argv[]) {
     static SiWizardState st;
     SiPage page;
     SiPageVtable commands = {0};
@@ -27,6 +97,7 @@ int main(void) {
     VARIANT name;
     wchar_t paragraph[256];
     int i;
+    (void)argc; (void)argv;
     st.hwnd = CreateWindowExW(0, L"STATIC", L"UI regression", WS_POPUP,
         0, 0, 640, 480, NULL, NULL, GetModuleHandleW(NULL), NULL);
     check(st.hwnd != NULL, "create test window");
@@ -119,5 +190,13 @@ int main(void) {
     sui_ctrl_host_release(&st.ctrl);
     DestroyWindow(st.hwnd);
     g_state = NULL;
+    for (i = 96; i <= 192; i += 48) {
+        check_reinstall_move(i, 0);
+        check_reinstall_move(i, 1);
+    }
     return failures ? 1 : 0;
+}
+
+int main(int argc, const char* const argv[]) {
+    return sui_test_main(argc, argv, run_tests);
 }

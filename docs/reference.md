@@ -330,7 +330,7 @@ int si_run(SiConfig* cfg, HINSTANCE hInst);  /* Library provides this */
 ```
 
 - **`si_main`** — You define this function. The library's `WinMainCRTStartup` calls it. Set up your `SiConfig` and call `si_run`.
-- **`si_run`** — Creates the wizard window and runs the message loop. Returns 0 on success.
+- **`si_run`** — Creates the fixed-size, DPI-scaled wizard window and runs the message loop. Moving the window preserves its dimensions; page text wraps within the existing layout. Returns 0 on success.
 
 ### Memory
 
@@ -527,3 +527,6 @@ To build and run the repository's tests after configuring it with CMake:
 cmake --build build --config MinSizeRel
 ctest --test-dir build -C MinSizeRel --output-on-failure
 ```
+
+The UI test runs on a private Windows desktop. Its caption-move checks use that
+window's message queue, without sending keyboard or mouse input to other apps.
